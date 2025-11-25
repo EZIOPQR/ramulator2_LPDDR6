@@ -32,7 +32,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       std::vector<std::string> trace_list = param<std::vector<std::string>>("traces").desc("A list of traces.").required();
       m_num_cores = trace_list.size();
 
-      int ipc   = param<int>("ipc").desc("IPC of the SimpleO3 core.").default_val(4);
+      int ipc   = param<int>("ipc").desc("IPC of the SimpleO3 core.").default_val(1);
       int depth = param<int>("inst_window_depth").desc("Instruction window size of the SimpleO3 core.").default_val(128);
 
       // LLC params

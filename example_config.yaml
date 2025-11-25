@@ -1,27 +1,27 @@
 Frontend:
   impl: SimpleO3
-  clock_ratio: 8
-  num_expected_insts: 500000
+  clock_ratio: 1
+  num_expected_insts: 100000
   traces: 
     - example_inst.trace
 
   Translation:
-    impl: RandomTranslation
+    impl: NoTranslation
     max_addr: 2147483648
               
 
 MemorySystem:
   impl: GenericDRAM
-  clock_ratio: 3
+  clock_ratio: 1
 
   DRAM:
-    impl: DDR4
+    impl: LPDDR5
     org:
-      preset: DDR4_8Gb_x8
+      preset: LPDDR5_2Gb_x16
       channel: 1
-      rank: 2
+      rank: 1
     timing:
-      preset: DDR4_2400R 
+      preset: LPDDR5_6400
 
   Controller:
     impl: Generic
@@ -31,8 +31,8 @@ MemorySystem:
       impl: AllBank
     RowPolicy:
       impl: ClosedRowPolicy
-      cap: 4
+      cap: 1000000
     plugins:
 
   AddrMapper:
-    impl: RoBaRaCoCh
+    impl: ChRaBaRoCo

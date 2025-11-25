@@ -173,6 +173,13 @@ SimpleO3LLC::CacheSet_t& SimpleO3LLC::get_set(Addr_t addr) {
 }
 
 SimpleO3LLC::CacheSet_t::iterator SimpleO3LLC::allocate_line(CacheSet_t& set, Addr_t addr) {
+  // NEW: if the line with same tag already exists, remove it
+  auto dup = std::find_if(set.begin(), set.end(),
+                          [addr, this](Line l){ return l.tag == get_tag(addr); });
+  if (dup != set.end()) {
+    set.erase(dup);
+  }
+
   // Check if we need to evict any line
   if (need_eviction(set, addr)) {
     // Get a victim to evict
@@ -221,6 +228,7 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
 
 
 SimpleO3LLC::CacheSet_t::iterator SimpleO3LLC::check_set_hit(CacheSet_t& set, Addr_t addr) {
+  return set.end();
   auto line_it = std::find_if(set.begin(), set.end(), [addr, this](Line l){return (l.tag == get_tag(addr));});
   if (!line_it->ready) {
     return set.end();
@@ -230,6 +238,7 @@ SimpleO3LLC::CacheSet_t::iterator SimpleO3LLC::check_set_hit(CacheSet_t& set, Ad
 }
 
 SimpleO3LLC::MSHR_t::iterator SimpleO3LLC::check_mshr_hit(Addr_t addr) {
+  return m_mshrs.end();
   auto mshr_it =
     std::find_if(
       m_mshrs.begin(), m_mshrs.end(),

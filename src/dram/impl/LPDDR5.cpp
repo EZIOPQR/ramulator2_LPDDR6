@@ -25,7 +25,7 @@ class LPDDR5 : public IDRAM, public Implementation {
   /************************************************
    *                Organization
    ***********************************************/   
-    const int m_internal_prefetch_size = 8;
+    const int m_internal_prefetch_size = 16;
 
     inline static constexpr ImplDef m_levels = {
       "channel", "rank", "bankgroup", "bank", "row", "column",    
@@ -76,14 +76,13 @@ class LPDDR5 : public IDRAM, public Implementation {
     );
 
     inline static constexpr ImplDef m_requests = {
-      "read16", "write16",
-      "all-bank-refresh", "per-bank-refresh"
+      "read", "write", "all-bank-refresh", "open-row", "close-row"
     };
 
     inline static const ImplLUT m_request_translations = LUT (
       m_requests, m_commands, {
-        {"read16", "RD16"}, {"write16", "WR16"}, 
-        {"all-bank-refresh", "REFab"}, {"per-bank-refresh", "REFpb"},
+        {"read", "RD16"}, {"write", "WR16"}, 
+        {"all-bank-refresh", "REFab"}, {"open-row", "ACT-1"}, {"close-row", "PRE"}
       }
     );
 
@@ -186,7 +185,7 @@ class LPDDR5 : public IDRAM, public Implementation {
   private:
     void set_organization() {
       // Channel width
-      m_channel_width = param_group("org").param<int>("channel_width").default_val(32);
+      m_channel_width = param_group("org").param<int>("channel_width").default_val(16);
 
       // Organization
       m_organization.count.resize(m_levels.size(), -1);
