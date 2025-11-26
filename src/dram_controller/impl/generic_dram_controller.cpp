@@ -65,6 +65,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           m_plugins.push_back(create_child_ifce<IControllerPlugin>(*it));
         }
       }
+
+      m_logger = Logging::create_logger("testlog");
     };
 
     void setup(IFrontEnd* frontend, IMemorySystem* memory_system) override {
@@ -202,6 +204,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           update_request_stats(req_it);
         }
         m_dram->issue_command(req_it->command, req_it->addr_vec);
+        m_logger->info("Issuing command {} for request addr {} at clk {}", 
+                       m_dram->m_commands(req_it->command), req_it->addr, m_clk);
 
         // If we are issuing the last command, set depart clock cycle and move the request to the pending queue
         if (req_it->command == req_it->final_command) {
@@ -305,6 +309,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
             // Check if this requests accesses the DRAM or is being forwarded.
             // TODO add the stats back
             s_read_latency += req.depart - req.arrive;
+            // log
+            m_logger->info("read latency: {}, arrive: {}, depart: {}", req.depart - req.arrive, req.arrive, req.depart);
           }
 
           if (req.callback) {
