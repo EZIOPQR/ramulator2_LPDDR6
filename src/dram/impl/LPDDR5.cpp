@@ -376,8 +376,8 @@ class LPDDR5 : public IDRAM, public Implementation {
           {.level = "rank", .preceding = {"RD16", "RD16A"}, .following = {"RD16", "RD16A", "WR16", "WR16A"}, .latency = V("nBL16") + V("nCS"), .is_sibling = true},
           {.level = "rank", .preceding = {"WR16", "WR16A"}, .following = {"RD16", "RD16A"}, .latency = V("nCL")  + V("nBL16") + V("nCS") - V("nCWL"), .is_sibling = true},
           /// CAS <-> PREab
-          {.level = "rank", .preceding = {"RD16"}, .following = {"PREA"}, .latency = V("nRTP")},
-          {.level = "rank", .preceding = {"WR16"}, .following = {"PREA"}, .latency = V("nCWL") + V("nBL16") + V("nWR")},          
+          {.level = "rank", .preceding = {"RD16"}, .following = {"PREA"}, .latency = V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min
+          {.level = "rank", .preceding = {"WR16"}, .following = {"PREA"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR")},          
           /// RAS <-> RAS
           {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1", "REFpb"}, .latency = V("nRRD")},          
           {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nFAW"), .window = 4},          
@@ -387,8 +387,8 @@ class LPDDR5 : public IDRAM, public Implementation {
           {.level = "rank", .preceding = {"ACT-1"}, .following = {"REFab"}, .latency = V("nRC")},          
           {.level = "rank", .preceding = {"PRE"}, .following = {"REFab"}, .latency = V("nRPpb")},          
           {.level = "rank", .preceding = {"PREA"}, .following = {"REFab"}, .latency = V("nRPab")},          
-          {.level = "rank", .preceding = {"RD16A"}, .following = {"REFab"}, .latency = V("nRPpb") + V("nRTP")},          
-          {.level = "rank", .preceding = {"WR16A"}, .following = {"REFab"}, .latency = V("nCWL") + V("nBL16") + V("nWR") + V("nRPpb")},          
+          {.level = "rank", .preceding = {"RD16A"}, .following = {"REFab"}, .latency = V("nRPpb") + V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min          
+          {.level = "rank", .preceding = {"WR16A"}, .following = {"REFab"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR") + V("nRPpb")},          
           {.level = "rank", .preceding = {"REFab"}, .following = {"REFab", "ACT-1", "REFpb"}, .latency = V("nRFCab")},          
           {.level = "rank", .preceding = {"ACT-1"},   .following = {"REFpb"}, .latency = V("nPBR2ACT")},  
           {.level = "rank", .preceding = {"REFpb"}, .following = {"REFpb"}, .latency = V("nPBR2PBR")},  
@@ -407,10 +407,10 @@ class LPDDR5 : public IDRAM, public Implementation {
           {.level = "bank", .preceding = {"ACT-2"}, .following = {"CASRD", "CASWR"}, .latency = V("nRCD") - 1},  
           {.level = "bank", .preceding = {"ACT-2"}, .following = {"PRE"}, .latency = V("nRAS")},  
           {.level = "bank", .preceding = {"PRE"}, .following = {"ACT-1"}, .latency = V("nRPpb")},  
-          {.level = "bank", .preceding = {"RD16"},  .following = {"PRE"}, .latency = V("nRTP")},  
-          {.level = "bank", .preceding = {"WR16"},  .following = {"PRE"}, .latency = V("nCWL") + V("nBL16") + V("nWR")},  
-          {.level = "bank", .preceding = {"RD16A"}, .following = {"ACT-1"}, .latency = V("nRTP") + V("nRPpb")},  
-          {.level = "bank", .preceding = {"WR16A"}, .following = {"ACT-1"}, .latency = V("nCWL") + V("nBL16") + V("nWR") + V("nRPpb")},  
+          {.level = "bank", .preceding = {"RD16"},  .following = {"PRE"}, .latency = V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min
+          {.level = "bank", .preceding = {"WR16"},  .following = {"PRE"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR")},  
+          {.level = "bank", .preceding = {"RD16A"}, .following = {"ACT-1"}, .latency = V("nRTP") + V("nRPpb") + V("nCCD_S")}, // 延时加上BL/n_min
+          {.level = "bank", .preceding = {"WR16A"}, .following = {"ACT-1"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR") + V("nRPpb")},  
         }
       );
       #undef V

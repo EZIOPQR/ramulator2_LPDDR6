@@ -1,7 +1,7 @@
 Frontend:
   impl: SimpleO3
   clock_ratio: 1
-  num_expected_insts: 1000
+  num_expected_insts: 10000
   traces: 
     - example_inst.trace
 
