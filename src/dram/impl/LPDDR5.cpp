@@ -1,5 +1,6 @@
 #include "dram/dram.h"
 #include "dram/lambdas.h"
+#include <bitset>
 
 namespace Ramulator {
 
@@ -125,6 +126,72 @@ class LPDDR5 : public IDRAM, public Implementation {
         {"column",    "N/A"},
       }
     );
+  
+  private:
+    // log
+    struct{
+      FILE* file = nullptr;
+    } vcdLogger;
+    bool issuedCmd = false;
+
+  public:
+    void initVCDLogger(){
+      FILE *tmpfs;
+      // 写入cmd对照表
+      tmpfs = fopen("trace/cmd_trans.txt", "w");
+      for(int i = 0; i < m_commands.size(); ++i){
+        fprintf(tmpfs, "%s %s\n", std::bitset<7>(i).to_string().c_str(), m_commands(i).data());
+      }
+      fprintf(tmpfs, "%s NOP\n", std::bitset<7>(m_commands.size()).to_string().c_str());
+      fclose(tmpfs);
+
+      // 写入bank状态对照表
+      tmpfs = fopen("trace/bank_status_trans.txt", "w");
+      for(int i = 0; i < m_states.size(); ++i){
+        fprintf(tmpfs, "%s %s\n", std::bitset<4>(i).to_string().c_str(), m_states(i).data());
+      }
+      fclose(tmpfs);
+
+      vcdLogger.file = fopen("trace/trace.vcd", "w");
+
+      fprintf(vcdLogger.file, "$timescale 1ps $end\n");
+      {
+        fprintf(vcdLogger.file, "$scope module ramulator $end\n");
+        {
+          fprintf(vcdLogger.file, "$scope module cmd $end\n");
+          fprintf(vcdLogger.file, "$var wire 64 cycle cycle $end\n"); // 当前周期
+          fprintf(vcdLogger.file, "$var wire 7 cmd cmd $end\n"); // 当前命令
+          fprintf(vcdLogger.file, "$var wire 64 addr addr $end\n"); // 当前命令对应的地址
+          fprintf(vcdLogger.file, "$var wire 2 WCKSync WCKSync $end\n"); // WCK同步状态
+          fprintf(vcdLogger.file, "$upscope $end\n");
+        }
+
+        // bank状态相关
+        {
+          fprintf(vcdLogger.file, "$scope module bank_status $end\n");
+          for (int i = 0; i < 4; i++) {
+            fprintf(vcdLogger.file, "$scope module bg%02d $end\n", i);
+            for(int j = 0; j < 4; j++) {
+              fprintf(vcdLogger.file, "$scope module ba%02d $end\n", j);
+              fprintf(vcdLogger.file, "$var wire 4 bank_status_%02d_%02d bank_status_%02d_%02d $end\n", i, j, i, j); // bank状态
+              fprintf(vcdLogger.file, "$upscope $end\n");
+            }
+            fprintf(vcdLogger.file, "$upscope $end\n");
+          }
+          fprintf(vcdLogger.file, "$upscope $end\n");
+        }
+        fprintf(vcdLogger.file, "$upscope $end\n");
+      }
+
+      fprintf(vcdLogger.file, "$enddefinitions $end\n");
+
+      fprintf(vcdLogger.file, "#0\n");
+    }
+
+    void VCDLogCycle(){
+      fprintf(vcdLogger.file, "#%lu\n", m_clk * 1250);
+    }
+
 
   public:
     struct Node : public DRAMNodeBase<LPDDR5> {
@@ -144,6 +211,22 @@ class LPDDR5 : public IDRAM, public Implementation {
   public:
     void tick() override {
       m_clk++;
+
+      // 如果上个周期没有cmd，则cmd置NOP
+      if(!issuedCmd){
+        fprintf(vcdLogger.file, "b%s cmd\n", std::bitset<7>(m_commands.size()).to_string().c_str());
+        fprintf(vcdLogger.file, "b0000000000000000000000000000000000000000000000000000000000000000 addr\n");
+      }
+      // log 当前周期
+      VCDLogCycle();
+      fprintf(vcdLogger.file, "b%s cycle\n", std::bitset<64>(m_clk).to_string().c_str());
+      // log WCKSync状态
+      if(m_clk <= m_channels[0]->m_child_nodes[0]->m_final_synced_cycle){
+        fprintf(vcdLogger.file, "b11 WCKSync\n");
+      } else {
+        fprintf(vcdLogger.file, "b00 WCKSync\n");
+      }
+
       for(int bg = 0; bg < 4; ++bg){
         for(int b = 0; b < 4; ++b){
           auto curState = m_channels[0]->m_child_nodes[0]->m_child_nodes[bg]->m_child_nodes[b]->m_state;
@@ -151,9 +234,17 @@ class LPDDR5 : public IDRAM, public Implementation {
           if(curState != lastState){
             m_logger->info("At clk {}, BankGroup {} Bank {} : {} -> {}", m_clk, bg, b, m_states(lastState), m_states(curState));
             last_m_states[bg][b] = curState;
+            fprintf(vcdLogger.file, "b%s bank_status_%02d_%02d\n", std::bitset<4>(curState).to_string().c_str(), bg, b);
           }
         }
-      }  
+      }
+      issuedCmd = false;  
+    };
+    
+    ~LPDDR5() override {
+      if(vcdLogger.file){
+        fclose(vcdLogger.file);
+      }
     };
 
     void init() override {
@@ -169,12 +260,26 @@ class LPDDR5 : public IDRAM, public Implementation {
       create_nodes();
 
       m_logger = Logging::create_logger("LPDDR5");
+      initVCDLogger();
     };
 
     void issue_command(int command, const AddrVec_t& addr_vec) override {
       if(command == m_commands("REFab")){
         m_logger->info("Issuing REFab at clk {}", m_clk);
       }
+
+      // VCD log 当前命令
+      fprintf(vcdLogger.file, "b%s cmd\n", std::bitset<7>(command).to_string().c_str());
+      issuedCmd = true;
+      unsigned long long addr = 0;
+      addr = addr_vec[m_levels["channel"]];
+      addr = (addr * m_organization.count[m_levels["rank"]]) + addr_vec[m_levels["rank"]];
+      addr = (addr * m_organization.count[m_levels["bankgroup"]]) + addr_vec[m_levels["bankgroup"]];
+      addr = (addr * m_organization.count[m_levels["bank"]]) + addr_vec[m_levels["bank"]];
+      addr = (addr * m_organization.count[m_levels["row"]]) + addr_vec[m_levels["row"]];
+      addr = (addr * m_organization.count[m_levels["column"]] * 16 / 8) + addr_vec[m_levels["column"]];
+      fprintf(vcdLogger.file, "b%s addr\n", std::bitset<64>(addr).to_string().c_str());
+
       int channel_id = addr_vec[m_levels["channel"]];
       m_channels[channel_id]->update_timing(command, addr_vec, m_clk);
       m_channels[channel_id]->update_states(command, addr_vec, m_clk);

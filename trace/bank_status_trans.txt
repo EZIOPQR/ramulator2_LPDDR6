@@ -1,0 +1,6 @@
+0000 Pre-Opened
+0001 Opened
+0010 Closed
+0011 PowerUp
+0100 N/A
+0101 Refreshing

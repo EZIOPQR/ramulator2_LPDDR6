@@ -1,0 +1,1 @@
+$HOME/.local/bin/gtkwave trace.vcd view.gtkw
