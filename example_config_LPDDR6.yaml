@@ -15,13 +15,13 @@ MemorySystem:
   clock_ratio: 1
 
   DRAM:
-    impl: LPDDR5
+    impl: LPDDR6
     org:
-      preset: LPDDR5_2Gb_x16
+      preset: LPDDR6_2Gb_x24
       channel: 1
       rank: 1
     timing:
-      preset: LPDDR5_6400
+      preset: LPDDR6_6400
 
   Controller:
     impl: Generic
@@ -35,4 +35,4 @@ MemorySystem:
     plugins:
 
   AddrMapper:
-    impl: ChRaBaRoCo
+    impl: ChRaBaRoCo_LPDDR6
