@@ -11,11 +11,11 @@ class LPDDR6 : public IDRAM, public Implementation {
     // column的定义修改，现在改为page size
     inline static const std::map<std::string, Organization> org_presets = {
       //   name           density   DQ   Ch Ra Bg Ba   Ro     Co
-      {"LPDDR6_2Gb_x24",  {2<<10,   12, {1, 1, 4, 4, 1<<13, 1<<14}}},
-      {"LPDDR6_4Gb_x24",  {4<<10,   12, {1, 1, 4, 4, 1<<14, 1<<14}}},
-      {"LPDDR6_8Gb_x24",  {8<<10,   12, {1, 1, 4, 4, 1<<15, 1<<14}}},
-      {"LPDDR6_16Gb_x24", {16<<10,  12, {1, 1, 4, 4, 1<<16, 1<<14}}},
-      {"LPDDR6_32Gb_x24", {32<<10,  12, {1, 1, 4, 4, 1<<17, 1<<14}}},
+      {"LPDDR6_2Gb_x24",  {2<<10,   12, {1, 1, 4, 4, 1<<13, 1<<11}}},
+      {"LPDDR6_4Gb_x24",  {4<<10,   12, {1, 1, 4, 4, 1<<14, 1<<11}}},
+      {"LPDDR6_8Gb_x24",  {8<<10,   12, {1, 1, 4, 4, 1<<15, 1<<11}}},
+      {"LPDDR6_16Gb_x24", {16<<10,  12, {1, 1, 4, 4, 1<<16, 1<<11}}},
+      {"LPDDR6_32Gb_x24", {32<<10,  12, {1, 1, 4, 4, 1<<17, 1<<11}}},
     };
 
     // nCCD_L: BL/n_max, nCCD_S: BL/n_min
@@ -281,6 +281,7 @@ class LPDDR6 : public IDRAM, public Implementation {
       initVCDLogger();
 
       m_cur_cmd = m_commands["NOP"];
+      m_cur_cmd_countdown = 1;
       m_cur_addr_vec = AddrVec_t(m_levels.size(), 0);
     };
 
@@ -301,7 +302,7 @@ class LPDDR6 : public IDRAM, public Implementation {
       addr = (addr * m_organization.count[m_levels["bankgroup"]]) + m_cur_addr_vec[m_levels["bankgroup"]];
       addr = (addr * m_organization.count[m_levels["bank"]]) + m_cur_addr_vec[m_levels["bank"]];
       addr = (addr * m_organization.count[m_levels["row"]]) + m_cur_addr_vec[m_levels["row"]];
-      addr = (addr * m_organization.count[m_levels["column"]] * 16 / 8) + m_cur_addr_vec[m_levels["column"]];
+      addr = (addr * m_organization.count[m_levels["column"]]) + m_cur_addr_vec[m_levels["column"]];
       fprintf(vcdLogger.file, "b%s addr\n", std::bitset<64>(addr).to_string().c_str());
     };
 
@@ -311,7 +312,6 @@ class LPDDR6 : public IDRAM, public Implementation {
           launch_command(m_cur_cmd, m_cur_addr_vec);
         }
         m_cur_cmd_countdown--;
-
         // VCD log 当前命令
         fprintf(vcdLogger.file, "b%s cmd\n", std::bitset<7>(m_cur_cmd).to_string().c_str());
         unsigned long long addr = 0;
@@ -320,7 +320,7 @@ class LPDDR6 : public IDRAM, public Implementation {
         addr = (addr * m_organization.count[m_levels["bankgroup"]]) + m_cur_addr_vec[m_levels["bankgroup"]];
         addr = (addr * m_organization.count[m_levels["bank"]]) + m_cur_addr_vec[m_levels["bank"]];
         addr = (addr * m_organization.count[m_levels["row"]]) + m_cur_addr_vec[m_levels["row"]];
-        addr = (addr * m_organization.count[m_levels["column"]] * 16 / 8) + m_cur_addr_vec[m_levels["column"]];
+        addr = (addr * m_organization.count[m_levels["column"]]) + m_cur_addr_vec[m_levels["column"]];
         fprintf(vcdLogger.file, "b%s addr\n", std::bitset<64>(addr).to_string().c_str());
       }
     }
@@ -398,7 +398,7 @@ class LPDDR6 : public IDRAM, public Implementation {
       size_t _density = size_t(m_organization.count[m_levels["bankgroup"]]) *
                         size_t(m_organization.count[m_levels["bank"]]) *
                         size_t(m_organization.count[m_levels["row"]]) *
-                        size_t(m_organization.count[m_levels["column"]]);
+                        size_t(m_organization.count[m_levels["column"]]) * 8;
       _density >>= 20;
       if (m_organization.density != _density) {
         throw ConfigurationError(

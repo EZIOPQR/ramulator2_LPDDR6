@@ -149,7 +149,7 @@ class LinearMapperBase_LPDDR6 : public IAddrMapper {
       }
 
       // Last (Column) address have the granularity of the prefetch size, 32bit metadata
-      m_addr_bits[m_num_levels - 1] -= calc_log2(m_dram->m_internal_prefetch_size * m_dram->m_organization.dq - 32);
+      m_addr_bits[m_num_levels - 1] -= calc_log2((m_dram->m_internal_prefetch_size * m_dram->m_organization.dq - 32) / 8);
 
       // 32bit metadata
       int tx_bytes = (m_dram->m_internal_prefetch_size * m_dram->m_channel_width - 32) / 8;

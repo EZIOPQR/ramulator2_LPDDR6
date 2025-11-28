@@ -227,7 +227,10 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
         }
 
       }else{
-        m_dram->issue_command(m_dram->m_commands("NOP"), AddrVec_t(m_dram->m_levels.size(), 0));
+        // 使用NOP占位
+        if(m_clk % 2 == 0){
+          m_dram->issue_command(m_dram->m_commands("NOP"), AddrVec_t(m_dram->m_levels.size(), 0));
+        }
       }
 
     };
