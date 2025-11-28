@@ -67,6 +67,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
       }
 
       m_logger = Logging::create_logger("testlog");
+      m_read_buffer.max_size = 1;
+      m_write_buffer.max_size = 1;
     };
 
     void setup(IFrontEnd* frontend, IMemorySystem* memory_system) override {
@@ -224,6 +226,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           }
         }
 
+      }else{
+        m_dram->issue_command(m_dram->m_commands("NOP"), AddrVec_t(m_dram->m_levels.size(), 0));
       }
 
     };

@@ -288,11 +288,11 @@ class LPDDR6 : public IDRAM, public Implementation {
     void issue_command(int command, const AddrVec_t& addr_vec) override {
       m_cur_cmd = command;
       m_cur_addr_vec = addr_vec;
-      m_cur_cmd_countdown = (m_command_nCK[command] == m_nCK["1CK"]) ? 1 : 
-                            (m_command_nCK[command] == m_nCK["2CK"]) ? 2 : 1;
-    };
-
-    void handle_cur_command(){
+      // 在dram_controller中先step dram，再step controller，所以当前clk周期已经到了
+      m_cur_cmd_countdown = (m_command_nCK[command] == m_nCK["1CK"]) ? 0 : 
+                            (m_command_nCK[command] == m_nCK["2CK"]) ? 1 : 
+                            1;
+      
       // VCD log 当前命令
       fprintf(vcdLogger.file, "b%s cmd\n", std::bitset<7>(m_cur_cmd).to_string().c_str());
       unsigned long long addr = 0;
@@ -303,15 +303,25 @@ class LPDDR6 : public IDRAM, public Implementation {
       addr = (addr * m_organization.count[m_levels["row"]]) + m_cur_addr_vec[m_levels["row"]];
       addr = (addr * m_organization.count[m_levels["column"]] * 16 / 8) + m_cur_addr_vec[m_levels["column"]];
       fprintf(vcdLogger.file, "b%s addr\n", std::bitset<64>(addr).to_string().c_str());
+    };
 
-      
+    void handle_cur_command(){
       if(m_cur_cmd_countdown > 0){
         if(m_cur_cmd_countdown == 1){
           launch_command(m_cur_cmd, m_cur_addr_vec);
-          m_cur_cmd = m_commands["NOP"];
-          m_cur_addr_vec = AddrVec_t(m_levels.size(), 0);
         }
         m_cur_cmd_countdown--;
+
+        // VCD log 当前命令
+        fprintf(vcdLogger.file, "b%s cmd\n", std::bitset<7>(m_cur_cmd).to_string().c_str());
+        unsigned long long addr = 0;
+        addr = m_cur_addr_vec[m_levels["channel"]];
+        addr = (addr * m_organization.count[m_levels["rank"]]) + m_cur_addr_vec[m_levels["rank"]];
+        addr = (addr * m_organization.count[m_levels["bankgroup"]]) + m_cur_addr_vec[m_levels["bankgroup"]];
+        addr = (addr * m_organization.count[m_levels["bank"]]) + m_cur_addr_vec[m_levels["bank"]];
+        addr = (addr * m_organization.count[m_levels["row"]]) + m_cur_addr_vec[m_levels["row"]];
+        addr = (addr * m_organization.count[m_levels["column"]] * 16 / 8) + m_cur_addr_vec[m_levels["column"]];
+        fprintf(vcdLogger.file, "b%s addr\n", std::bitset<64>(addr).to_string().c_str());
       }
     }
 
@@ -327,8 +337,8 @@ class LPDDR6 : public IDRAM, public Implementation {
     };
 
     bool check_ready(int command, const AddrVec_t& addr_vec) override {
-      // LPDDR6只允许在even cycle发命令，根据ramulator的逻辑，是在m_clk+1时刻发命令
-      if((m_clk + 1) % 2 != 0){
+      // LPDDR6只允许在even cycle发命令
+      if(m_clk % 2 != 0){
         return false;
       }
 
