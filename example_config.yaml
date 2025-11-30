@@ -1,5 +1,5 @@
 Frontend:
-  impl: SimpleO3
+  impl: Simple_rw_processor
   clock_ratio: 1
   num_expected_insts: 150
   traces: 

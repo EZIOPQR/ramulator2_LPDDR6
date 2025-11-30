@@ -26,7 +26,7 @@ class LPDDR6 : public IDRAM, public Implementation {
     // 去除nRC，因为nRC=nRAS+nRPab或nPRpb
     inline static const std::map<std::string, std::vector<int>> timing_presets = {
       //   name         rate   nBL  nCL  nWCKPST   nRCD_r   nRCD_w   nRPab  nRPpb   nRAS   nWTP  nRTP nCWL nCCD_S nCCD_L nRRD nWTR_S nWTR_L nFAW  nPPD  nREFI nCS,  tCK_ps
-      {"LPDDR6_6400",  {6400,  6,   34,     1,      29,      13,     69,    64,     32,    20,   8,  18,    6,     6,    6,    10,    20,   24,   4,    -1,   2,   1250}},
+      {"LPDDR6_6400",  {6400,  6,   34,     1,      29,      13,     69,    64,     32,    20,   8,  18,    6,     12,    6,    10,    20,   24,   4,    -1,   2,   1250}},
     };
 
 
@@ -521,8 +521,8 @@ class LPDDR6 : public IDRAM, public Implementation {
 
           /*** Same Bank Group ***/ 
           /// CAS <-> CAS
-          {.level = "bankgroup", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nCCD_L") - 1},          
-          {.level = "bankgroup", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nCCD_L") - 1},       
+          {.level = "bankgroup", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nBL24") - 1},          
+          {.level = "bankgroup", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nBL24") - 1},       
           /// RD <-> WR, Minimum Read to Write                      
           {.level = "bankgroup", .preceding = {"RD24"}, .following = {"WR24", "WR24A"}, .latency = V("nCL") + V("nCCD_L") + 2 - V("nCWL") - 1}, 
           /// WR <-> RD, Minimum Read after Write  

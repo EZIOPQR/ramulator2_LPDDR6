@@ -8,9 +8,11 @@ target_sources(
   impl/memory_trace/readwrite_trace.cpp
 
   impl/processor/simpleO3/simpleO3.cpp
+  impl/processor/simpleO3/simple_rw_processor.cpp
   impl/processor/simpleO3/core.h      impl/processor/simpleO3/core.cpp
   impl/processor/simpleO3/llc.h       impl/processor/simpleO3/llc.cpp
   impl/processor/simpleO3/trace.h     impl/processor/simpleO3/trace.cpp
+  impl/processor/simpleO3/trace_rw.h  impl/processor/simpleO3/trace_rw.cpp
 
   impl/processor/bhO3/bhO3.h      impl/processor/bhO3/bhO3.cpp
   impl/processor/bhO3/bhcore.h    impl/processor/bhO3/bhcore.cpp
