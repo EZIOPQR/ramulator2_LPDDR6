@@ -2,6 +2,10 @@
 #include "dram/lambdas.h"
 #include <bitset>
 
+// TODO: RD24A/WR24A的timing和行为还没有实现
+// TODO: refresh相关的timing没有实现，目前只有全片refresh的功能
+
+
 namespace Ramulator {
 
 class LPDDR6 : public IDRAM, public Implementation {
@@ -19,9 +23,10 @@ class LPDDR6 : public IDRAM, public Implementation {
     };
 
     // nCCD_L: BL/n_max, nCCD_S: BL/n_min
+    // 去除nRC，因为nRC=nRAS+nRPab或nPRpb
     inline static const std::map<std::string, std::vector<int>> timing_presets = {
-      //   name         rate   nBL  nCL  nWCKPST   nRCD  nRPab  nRPpb   nRAS  nRC   nWR  nRTP nCWL nCCD_S nCCD_L nRRD nWTRS nWTRL nFAW  nPPD  nRFCab nRFCpb nREFI nPBR2PBR nPBR2ACT nCS,  tCK_ps
-      {"LPDDR6_6400",  {6400,  2,   20,     7,      15,    17,   15,     34,   30,   28,   4,  11,    2,     4,    4,    5,    10,   16,  2,   -1,      -1,   -1,   -1,        -1,    2,   1250}},
+      //   name         rate   nBL  nCL  nWCKPST   nRCD_r   nRCD_w   nRPab  nRPpb   nRAS   nWTP  nRTP nCWL nCCD_S nCCD_L nRRD nWTR_S nWTR_L nFAW  nPPD  nREFI nCS,  tCK_ps
+      {"LPDDR6_6400",  {6400,  6,   34,     1,      29,      13,     69,    64,     32,    20,   8,  18,    6,     6,    6,    10,    20,   24,   4,    -1,   2,   1250}},
     };
 
 
@@ -107,17 +112,17 @@ class LPDDR6 : public IDRAM, public Implementation {
   /************************************************
    *                   Timing
    ***********************************************/
-    // nWCKPST=RD(tWCKPST/tCK)
+    // nWCKPST=RD(tWCKPST/tCK), 时序约束必须考虑-nCK!!!
     inline static constexpr ImplDef m_timings = {
       "rate", 
-      "nBL16", "nCL", "nWCKPST", "nRCD", "nRPab", "nRPpb", "nRAS", "nRC", "nWR", "nRTP", "nCWL",
+      "nBL24", "nCL", "nWCKPST", "nRCD_r", "nRCD_w", 
+      "nRPab", "nRPpb", "nRAS", "nWTP", "nRTP", "nCWL",
       "nCCD_S", "nCCD_L",
       "nRRD",
-      "nWTRS", "nWTRL",
+      "nWTR_S", "nWTR_L",
       "nFAW",
       "nPPD",
-      "nRFCab", "nRFCpb","nREFI",
-      "nPBR2PBR", "nPBR2ACT",
+      "nREFI",
       "nCS",
       "tCK_ps"
     };
@@ -452,26 +457,6 @@ class LPDDR6 : public IDRAM, public Implementation {
 
 
       // Refresh timings
-      // tRFC table (unit is nanosecond!)
-      constexpr int tRFCab_TABLE[4] = {
-      //  2Gb   4Gb   8Gb  16Gb
-          130,  180,  210,  280, 
-      };
-
-      constexpr int tRFCpb_TABLE[4] = {
-      //  2Gb   4Gb   8Gb  16Gb
-          60,   90,   120,  140, 
-      };
-
-      constexpr int tPBR2PBR_TABLE[4] = {
-      //  2Gb   4Gb   8Gb  16Gb
-          60,   90,   90,  90, 
-      };
-
-      constexpr int tPBR2ACT_TABLE[4] = {
-      //  2Gb   4Gb   8Gb  16Gb
-          8,    8,    8,   8, 
-      };
 
       // tREFI(base) table (unit is nanosecond!)
       constexpr int tREFI_BASE = 3906;
@@ -485,10 +470,6 @@ class LPDDR6 : public IDRAM, public Implementation {
         }
       }(m_organization.density);
 
-      m_timing_vals("nRFCab")    = JEDEC_rounding(tRFCab_TABLE[density_id], tCK_ps);
-      m_timing_vals("nRFCpb")    = JEDEC_rounding(tRFCpb_TABLE[density_id], tCK_ps);
-      m_timing_vals("nPBR2PBR")  = JEDEC_rounding(tPBR2PBR_TABLE[density_id], tCK_ps);
-      m_timing_vals("nPBR2ACT")  = JEDEC_rounding(tPBR2ACT_TABLE[density_id], tCK_ps);
       m_timing_vals("nREFI") = JEDEC_rounding(tREFI_BASE, tCK_ps);
 
       // Overwrite timing parameters with any user-provided value
@@ -513,63 +494,56 @@ class LPDDR6 : public IDRAM, public Implementation {
       }      
 
       // Set read latency
-      m_read_latency = m_timing_vals("nCL") + m_timing_vals("nBL16");
+      m_read_latency = m_timing_vals("nCL") + m_timing_vals("nBL24");
 
       // Populate the timing constraints
+      // 减一是因为命令实际上是在第二个周期execute的
       #define V(timing) (m_timing_vals(timing))
       populate_timingcons(this, {
           /*** Channel ***/ 
           // CAS <-> CAS
           /// Data bus occupancy
-          {.level = "channel", .preceding = {"RD24", "RD24A"}, .following = {"RD24", "RD24A"}, .latency = V("nBL16")},
-          {.level = "channel", .preceding = {"WR24", "WR24A"}, .following = {"WR24", "WR24A"}, .latency = V("nBL16")},
+          {.level = "channel", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nBL24") - 1},
+          {.level = "channel", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nBL24") - 1},
 
           /*** Rank (or different BankGroup) ***/ 
           // CAS <-> CAS
-          {.level = "rank", .preceding = {"RD24", "RD24A"}, .following = {"RD24", "RD24A"}, .latency = V("nCCD_S")},
-          {.level = "rank", .preceding = {"WR24", "WR24A"}, .following = {"WR24", "WR24A"}, .latency = V("nCCD_S")},
-          /// RD <-> WR, Minimum Read to Write, Assuming tWPRE = 1 tCK                          
-          {.level = "rank", .preceding = {"RD24", "RD24A"}, .following = {"WR24", "WR24A"}, .latency = V("nCL") + V("nCCD_S") + 2 - V("nCWL")},
+          {.level = "rank", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nCCD_S") - 1},
+          {.level = "rank", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nCCD_S") - 1},
+          /// RD <-> WR, Minimum Read to Write                      
+          {.level = "rank", .preceding = {"RD24"}, .following = {"WR24", "WR24A"}, .latency = V("nCL") + V("nCCD_S") + 2 - V("nCWL") - 1},
           /// WR <-> RD, Minimum Read after Write
-          {.level = "rank", .preceding = {"WR24", "WR24A"}, .following = {"RD24", "RD24A"}, .latency = V("nCWL") + V("nBL16") + V("nWTRS")},
-          /// CAS <-> CAS between sibling ranks, nCS (rank switching) is needed for new DQS
-          {.level = "rank", .preceding = {"RD24", "RD24A"}, .following = {"RD24", "RD24A", "WR24", "WR24A"}, .latency = V("nBL16") + V("nCS"), .is_sibling = true},
-          {.level = "rank", .preceding = {"WR24", "WR24A"}, .following = {"RD24", "RD24A"}, .latency = V("nCL")  + V("nBL16") + V("nCS") - V("nCWL"), .is_sibling = true},
-          /// CAS <-> PREab
-          {.level = "rank", .preceding = {"RD24"}, .following = {"PREA"}, .latency = V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min
-          {.level = "rank", .preceding = {"WR24"}, .following = {"PREA"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR")},          
+          {.level = "rank", .preceding = {"WR24"}, .following = {"RD24", "RD24A"}, .latency = V("nCWL") + V("nCCD_S") + V("nWTR_S") - 1},     
           /// RAS <-> RAS
-          {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1", "REFpb"}, .latency = V("nRRD")},          
-          {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nFAW"), .window = 4},          
-          {.level = "rank", .preceding = {"ACT-1"}, .following = {"PREA"}, .latency = V("nRAS")},          
-          {.level = "rank", .preceding = {"PREA"}, .following = {"ACT-1"}, .latency = V("nRPab")},          
-          /// RAS <-> REF
-          {.level = "rank", .preceding = {"ACT-1"}, .following = {"REFab"}, .latency = V("nRC")},          
-          {.level = "rank", .preceding = {"PRE"}, .following = {"REFab"}, .latency = V("nRPpb")},          
-          {.level = "rank", .preceding = {"PREA"}, .following = {"REFab"}, .latency = V("nRPab")},          
-          {.level = "rank", .preceding = {"RD24A"}, .following = {"REFab"}, .latency = V("nRPpb") + V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min          
-          {.level = "rank", .preceding = {"WR24A"}, .following = {"REFab"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR") + V("nRPpb")},          
-          {.level = "rank", .preceding = {"REFab"}, .following = {"REFab", "ACT-1", "REFpb"}, .latency = V("nRFCab")},          
-          {.level = "rank", .preceding = {"ACT-1"},   .following = {"REFpb"}, .latency = V("nPBR2ACT")},  
-          {.level = "rank", .preceding = {"REFpb"}, .following = {"REFpb"}, .latency = V("nPBR2PBR")},  
+          {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nRRD") - 1},          
+          {.level = "rank", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nFAW") - 1, .window = 4},
+          {.level = "rank", .preceding = {"PRE", "PREA"}, .following = {"PRE", "PREA"}, .latency = 4 - 1},
 
           /*** Same Bank Group ***/ 
           /// CAS <-> CAS
-          {.level = "bankgroup", .preceding = {"RD24", "RD24A"}, .following = {"RD24", "RD24A"}, .latency = V("nCCD_L")},          
-          {.level = "bankgroup", .preceding = {"WR24", "WR24A"}, .following = {"WR24", "WR24A"}, .latency = V("nCCD_L")},          
-          {.level = "bankgroup", .preceding = {"WR24", "WR24A"}, .following = {"RD24", "RD24A"}, .latency = V("nCWL") + V("nBL16") + V("nWTRL")},
+          {.level = "bankgroup", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nCCD_L") - 1},          
+          {.level = "bankgroup", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nCCD_L") - 1},       
+          /// RD <-> WR, Minimum Read to Write                      
+          {.level = "bankgroup", .preceding = {"RD24"}, .following = {"WR24", "WR24A"}, .latency = V("nCL") + V("nCCD_L") + 2 - V("nCWL") - 1}, 
+          /// WR <-> RD, Minimum Read after Write  
+          {.level = "bankgroup", .preceding = {"WR24"}, .following = {"RD24", "RD24A"}, .latency = V("nCWL") + V("nCCD_L") + V("nWTR_L") - 1},
           /// RAS <-> RAS
-          {.level = "bankgroup", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nRRD")},  
+          {.level = "bankgroup", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nRRD") - 1},  
+          {.level = "bankgroup", .preceding = {"PRE", "PREA"}, .following = {"PRE", "PREA"}, .latency = 4 - 1},
 
           /*** Bank ***/ 
-          {.level = "bank", .preceding = {"ACT-1"}, .following = {"ACT-1"}, .latency = V("nRC")},  
-          {.level = "bank", .preceding = {"ACT-2"}, .following = {"RD24", "RD24A", "WR24", "WR24A"}, .latency = V("nRCD")},  
-          {.level = "bank", .preceding = {"ACT-2"}, .following = {"PRE"}, .latency = V("nRAS")},  
-          {.level = "bank", .preceding = {"PRE"}, .following = {"ACT-1"}, .latency = V("nRPpb")},  
-          {.level = "bank", .preceding = {"RD24"},  .following = {"PRE"}, .latency = V("nRTP") + V("nCCD_S")}, // 延时加上BL/n_min
-          {.level = "bank", .preceding = {"WR24"},  .following = {"PRE"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR")},  
-          {.level = "bank", .preceding = {"RD24A"}, .following = {"ACT-1"}, .latency = V("nRTP") + V("nRPpb") + V("nCCD_S")}, // 延时加上BL/n_min
-          {.level = "bank", .preceding = {"WR24A"}, .following = {"ACT-1"}, .latency = V("nCWL") + V("nCCD_S") + 1 + V("nWR") + V("nRPpb")},  
+          {.level = "bank", .preceding = {"ACT-2"}, .following = {"RD24", "RD24A"}, .latency = V("nRCD_r") - 1},  
+          {.level = "bank", .preceding = {"ACT-2"}, .following = {"WR24", "WR24A"}, .latency = V("nRCD_w") - 1},  
+          {.level = "bank", .preceding = {"ACT-2"}, .following = {"PRE"}, .latency = V("nRAS") - 1},  
+          {.level = "bank", .preceding = {"RD24"}, .following = {"RD24", "RD24A"}, .latency = V("nBL24") - 1},  
+          {.level = "bank", .preceding = {"RD24"}, .following = {"WR24", "WR24A"}, .latency = V("nCL") + V("nCCD_L") + 2 - V("nCWL") - 1},
+          {.level = "bank", .preceding = {"RD24"}, .following = {"PRE", "PREA"}, .latency = V("nRTP") - 1},
+          {.level = "bank", .preceding = {"WR24"}, .following = {"RD24", "RD24A"}, .latency = V("nCWL") + V("nCCD_L") + V("nWTR_L") - 1},  
+          {.level = "bank", .preceding = {"WR24"}, .following = {"WR24", "WR24A"}, .latency = V("nBL24") - 1},  
+          {.level = "bank", .preceding = {"WR24"}, .following = {"PRE", "PREA"}, .latency = V("nCWL") + V("nCCD_L") + V("nWTP") - 1},  
+          {.level = "bank", .preceding = {"PRE"}, .following = {"ACT-1"}, .latency = V("nRPpb") - 2 - 1}, // 实际约束的是到ACT-2的时间
+          {.level = "bank", .preceding = {"PREA"}, .following = {"ACT-1"}, .latency = V("nRPab") - 2 - 1}, // 实际约束的是到ACT-2的时间
+          {.level = "bank", .preceding = {"PRE", "PREA"}, .following = {"PRE", "PREA"}, .latency = 4 - 1}
         }
       );
       #undef V
@@ -582,10 +556,10 @@ class LPDDR6 : public IDRAM, public Implementation {
       // Rank Actions
       m_actions[m_levels["rank"]][m_commands["PREA"]] = Lambdas::Action::Rank::PREab<LPDDR6>;
       m_actions[m_levels["rank"]][m_commands["RD24"]] = [this] (Node* node, int cmd, int target_id, Clk_t clk) {
-        m_final_synced_cycle = clk + m_timing_vals("nCL") + m_timing_vals("nBL16") + m_timing_vals("nWCKPST"); 
+        m_final_synced_cycle = clk + m_timing_vals("nCL") + m_timing_vals("nBL24") + m_timing_vals("nWCKPST"); 
       };
       m_actions[m_levels["rank"]][m_commands["WR24"]] = [this] (Node* node, int cmd, int target_id, Clk_t clk) {
-        m_final_synced_cycle = clk + m_timing_vals("nCWL") + m_timing_vals("nBL16") + m_timing_vals("nWCKPST"); 
+        m_final_synced_cycle = clk + m_timing_vals("nCWL") + m_timing_vals("nBL24") + m_timing_vals("nWCKPST"); 
       };
       // Bank actions
       m_actions[m_levels["bank"]][m_commands["ACT-1"]] = [] (Node* node, int cmd, int target_id, Clk_t clk) {
